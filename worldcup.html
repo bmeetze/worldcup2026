@@ -277,7 +277,7 @@ function runSelfTests(){
   assert('Alpha tops group (4 pts)', t[0].code==='AA' && t[0].Pts===4);
   assert('GD computed for Alpha (+2)', t[0].GD===2);
   assert('All three teams ranked', t.length===3);
-  assert('Bravo above Cesar on GD/name fallback', t.findIndex(r=>r.code==='BB') < t.findIndex(r=>r.code==='CC') || t[1].Pts===t[2].Pts);
+  assert('Cesar (2 pts) ranked above Bravo (1 pt)', t.findIndex(r=>r.code==='CC') < t.findIndex(r=>r.code==='BB'));
   const ics = buildIcs([{id:'x',homeName:'A',awayName:'B',kickoffUtc:'2026-06-11T20:00:00Z',venue:'V'}]);
   assert('ICS has VEVENT', /BEGIN:VEVENT[\s\S]*END:VEVENT/.test(ics));
   assert('ICS has 30-min alarm', /TRIGGER:-PT30M/.test(ics));
