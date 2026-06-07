@@ -99,6 +99,26 @@ const FLAG_BY_TLA = {
 };
 export function flagFor(tla){ return FLAG_BY_TLA[tla] || ''; }
 
+// FIFA 3-letter (TLA) -> confederation code.
+const CONFED_BY_TLA = {
+  // UEFA (Europe)
+  CZE:'UEFA', BIH:'UEFA', SUI:'UEFA', SCO:'UEFA', TUR:'UEFA', GER:'UEFA', NED:'UEFA',
+  SWE:'UEFA', BEL:'UEFA', ESP:'UEFA', FRA:'UEFA', NOR:'UEFA', AUT:'UEFA', POR:'UEFA',
+  CRO:'UEFA', ENG:'UEFA',
+  // CONMEBOL (South America)
+  BRA:'CONMEBOL', PAR:'CONMEBOL', ECU:'CONMEBOL', URY:'CONMEBOL', ARG:'CONMEBOL', COL:'CONMEBOL',
+  // CONCACAF (North/Central America & Caribbean)
+  MEX:'CONCACAF', CAN:'CONCACAF', USA:'CONCACAF', HAI:'CONCACAF', CUW:'CONCACAF', PAN:'CONCACAF',
+  // CAF (Africa)
+  RSA:'CAF', MAR:'CAF', CIV:'CAF', TUN:'CAF', EGY:'CAF', CPV:'CAF', SEN:'CAF', ALG:'CAF',
+  GHA:'CAF', COD:'CAF',
+  // AFC (Asia & Australia)
+  KOR:'AFC', QAT:'AFC', AUS:'AFC', JPN:'AFC', IRN:'AFC', KSA:'AFC', IRQ:'AFC', JOR:'AFC', UZB:'AFC',
+  // OFC (Oceania)
+  NZL:'OFC',
+};
+export function confederationFor(tla){ return CONFED_BY_TLA[tla] || ''; }
+
 // Build the teams[] array from the API match list (deduped by tla).
 export function teamsFromMatches(apiMatches) {
   const map = new Map();
@@ -107,7 +127,7 @@ export function teamsFromMatches(apiMatches) {
     const group = api.group.replace('GROUP_', '');
     for (const side of [api.homeTeam, api.awayTeam]) {
       if (side?.tla && !map.has(side.tla)) {
-        map.set(side.tla, { code: side.tla, name: side.name, flag: flagFor(side.tla), group });
+        map.set(side.tla, { code: side.tla, name: side.name, flag: flagFor(side.tla), group, confederation: confederationFor(side.tla) });
       }
     }
   }

@@ -115,3 +115,15 @@ test('flagFor maps known TLAs to flag emoji and unknowns to empty', () => {
   assert.equal(flagFor('ENG'), '🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}');
   assert.equal(flagFor('ZZZ'), '');
 });
+
+import { confederationFor } from '../wc-lib.mjs';
+
+test('confederationFor maps known TLAs and unknowns to empty', () => {
+  assert.equal(confederationFor('BRA'), 'CONMEBOL');
+  assert.equal(confederationFor('ENG'), 'UEFA');
+  assert.equal(confederationFor('USA'), 'CONCACAF');
+  assert.equal(confederationFor('JPN'), 'AFC');
+  assert.equal(confederationFor('NZL'), 'OFC');
+  assert.equal(confederationFor('RSA'), 'CAF');
+  assert.equal(confederationFor('ZZZ'), '');
+});
