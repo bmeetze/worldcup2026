@@ -94,7 +94,51 @@ function matchRow(m){
     <span>${teamLabel(m,'home')} <span style="color:var(--muted)">v</span> ${teamLabel(m,'away')}</span>
     <span>${scoreOrTime(m)}</span></div>`;
 }
+function matchRowWithCal(m){
+  return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <span>${teamLabel(m,'home')} <span style="color:var(--muted)">v</span> ${teamLabel(m,'away')}</span>
+    <span style="display:flex;align-items:center;gap:10px">${scoreOrTime(m)}
+      <button onclick="addMatchToCalendar('${m.id}')" title="Add to calendar"
+        style="border:1px solid var(--line);background:var(--card);border-radius:6px;cursor:pointer;padding:4px 8px;font-size:12px">📅</button>
+    </span></div>`;
+}
 function sortedMatches(){ return [...WC.matches].sort((a,b)=>a.kickoffUtc.localeCompare(b.kickoffUtc)); }
+
+// ---- .ics calendar export ----
+function icsStamp(d){ // UTC -> YYYYMMDDTHHMMSSZ
+  return d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+}
+function matchTitle(m){ return `${m.homeName} v ${m.awayName} (WC 2026)`; }
+function vevent(m){
+  const start = kickoff(m);
+  const end = new Date(start.getTime() + 2*3.6e6); // 2 hours
+  return [
+    'BEGIN:VEVENT',
+    `UID:${m.id}@worldcup2026`,
+    `DTSTAMP:${icsStamp(new Date(0))}`,
+    `DTSTART:${icsStamp(start)}`,
+    `DTEND:${icsStamp(end)}`,
+    `SUMMARY:${matchTitle(m)}`,
+    m.venue ? `LOCATION:${m.venue}` : '',
+    'BEGIN:VALARM','TRIGGER:-PT30M','ACTION:DISPLAY','DESCRIPTION:Kickoff soon','END:VALARM',
+    'END:VEVENT',
+  ].filter(Boolean).join('\r\n');
+}
+function buildIcs(matches){
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//worldcup2026//EN',
+    ...matches.map(vevent),'END:VCALENDAR'].join('\r\n');
+}
+function downloadIcs(filename, matches){
+  const blob = new Blob([buildIcs(matches)], {type:'text/calendar'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+// expose for inline onclick handlers
+window.addMatchToCalendar = (id) => {
+  const m = WC.matches.find(x=>x.id===id);
+  if (m) downloadIcs(`${m.home}-${m.away}.ics`, [m]);
+};
 
 // ---- tab routing (hash-based; works on file:// and Pages) ----
 const TABS = ['today','upcoming','myteams','standings','bracket'];
@@ -149,7 +193,18 @@ const RENDERERS = {
     el.innerHTML = html;
     startCountdown(next);
   },
-  upcoming: el => el.innerHTML = '<div class="empty">Upcoming — coming soon</div>',
+  upcoming: el => {
+    const now = new Date();
+    const future = sortedMatches().filter(m => kickoff(m) >= new Date(now.getFullYear(),now.getMonth(),now.getDate()));
+    if (!future.length){ el.innerHTML = '<div class="empty">No upcoming matches</div>'; return; }
+    let html = '', lastDay = '';
+    for (const m of future){
+      const day = fmtDay(m);
+      if (day !== lastDay){ html += `<div class="label">${day}</div>`; lastDay = day; }
+      html += matchRowWithCal(m);
+    }
+    el.innerHTML = html;
+  },
   myteams: el => el.innerHTML = '<div class="empty">My Teams — coming soon</div>',
   standings: el => el.innerHTML = '<div class="empty">Standings — coming soon</div>',
   bracket: el => el.innerHTML = '<div class="empty">Bracket — coming soon</div>',
