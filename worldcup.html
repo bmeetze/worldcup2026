@@ -80,7 +80,8 @@ function teamLabel(m, side){ // side: 'home'|'away'
   const code = side==='home'? m.home : m.away;
   const t = WC.teams.find(t=>t.code===code);
   const flag = t && t.flag ? t.flag+' ' : '';
-  return flag + name;
+  const star = code!=='TBD' && isFav(code) ? '⭐ ' : '';
+  return star + flag + name;
 }
 function scoreOrTime(m){
   if (m.status==='finished' || m.status==='live'){
@@ -103,6 +104,15 @@ function matchRowWithCal(m){
     </span></div>`;
 }
 function sortedMatches(){ return [...WC.matches].sort((a,b)=>a.kickoffUtc.localeCompare(b.kickoffUtc)); }
+
+// ---- favorites (per-device, localStorage) ----
+const FAV_KEY = 'wc2026.favorites';
+function getFavs(){ try{ return new Set(JSON.parse(localStorage.getItem(FAV_KEY)||'[]')); }catch{ return new Set(); } }
+function setFavs(set){ localStorage.setItem(FAV_KEY, JSON.stringify([...set])); }
+function isFav(code){ return getFavs().has(code); }
+function toggleFav(code){ const s=getFavs(); s.has(code)?s.delete(code):s.add(code); setFavs(s); render(); }
+window.toggleFav = toggleFav;
+function matchInvolvesFav(m){ const f=getFavs(); return f.has(m.home)||f.has(m.away); }
 
 // ---- standings (computed from finished group matches) ----
 // Tiebreak: points, then goal difference, then goals for, then team name.
@@ -161,6 +171,10 @@ function downloadIcs(filename, matches){
 window.addMatchToCalendar = (id) => {
   const m = WC.matches.find(x=>x.id===id);
   if (m) downloadIcs(`${m.home}-${m.away}.ics`, [m]);
+};
+window.exportMyTeams = () => {
+  const mine = sortedMatches().filter(matchInvolvesFav);
+  if (mine.length) downloadIcs('my-world-cup-games.ics', mine);
 };
 
 // ---- tab routing (hash-based; works on file:// and Pages) ----
@@ -228,7 +242,29 @@ const RENDERERS = {
     }
     el.innerHTML = html;
   },
-  myteams: el => el.innerHTML = '<div class="empty">My Teams — coming soon</div>',
+  myteams: el => {
+    const groups = allGroupLetters();
+    const favs = getFavs();
+    let html = '<div class="label">Pick your teams</div><div class="card">';
+    for (const g of groups){
+      const teams = WC.teams.filter(t=>t.group===g).sort((a,b)=>a.name.localeCompare(b.name));
+      html += teams.map(t=>{
+        const on = favs.has(t.code);
+        return `<button onclick="toggleFav('${t.code}')" style="margin:3px;padding:5px 9px;border-radius:14px;cursor:pointer;font-size:13px;
+          border:1px solid ${on?'var(--accent)':'var(--line)'};background:${on?'var(--accent-soft)':'var(--card)'}">
+          ${on?'⭐ ':''}${t.flag?t.flag+' ':''}${t.name}</button>`;
+      }).join('');
+    }
+    html += '</div>';
+    html += '<div class="label">Your matches</div>';
+    if (!favs.size){ html += '<div class="empty">Pick teams above to see their matches</div>'; }
+    else {
+      const mine = sortedMatches().filter(matchInvolvesFav);
+      html += mine.length ? mine.map(matchRowWithCal).join('') : '<div class="empty">No matches for your teams</div>';
+      html += `<button onclick="exportMyTeams()" style="margin-top:10px;padding:8px 14px;border-radius:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent-soft)">📅 Export all my teams' games (.ics)</button>`;
+    }
+    el.innerHTML = html;
+  },
   standings: el => {
     const groups = allGroupLetters();
     if (!groups.length){ el.innerHTML = '<div class="empty">No groups</div>'; return; }
