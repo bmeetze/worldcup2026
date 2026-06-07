@@ -288,7 +288,29 @@ const RENDERERS = {
     html += `<p style="color:var(--muted);font-size:12px;margin-top:12px">Green = top 2 (qualify). Amber = 3rd (best-third watch). Ties broken by GD, then GF, then name.</p>`;
     el.innerHTML = html;
   },
-  bracket: el => el.innerHTML = '<div class="empty">Bracket — coming soon</div>',
+  bracket: el => {
+    const rounds = [
+      ['r32','Round of 32'],['r16','Round of 16'],['qf','Quarter-finals'],
+      ['sf','Semi-finals'],['third','Third place'],['final','Final'],
+    ];
+    let html = '';
+    let any = false;
+    for (const [stage,title] of rounds){
+      const games = sortedMatches().filter(m=>m.stage===stage);
+      if (!games.length) continue;
+      any = true;
+      html += `<div class="label">${title}</div>`;
+      html += games.map(m=>{
+        const decided = m.status==='finished';
+        const hi = matchInvolvesFav(m) ? 'border-left:3px solid var(--accent);' : '';
+        return `<div class="card" style="${hi}display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>${teamLabel(m,'home')} <span style="color:var(--muted)">v</span> ${teamLabel(m,'away')}</span>
+          <span>${decided ? `<strong>${m.homeScore}–${m.awayScore}</strong>` : `<span style="color:var(--muted)">${fmtDay(m)} ${fmtTime(m)}</span>`}</span>
+        </div>`;
+      }).join('');
+    }
+    el.innerHTML = any ? html : '<div class="empty">Knockout fixtures appear once the bracket is set</div>';
+  },
 };
 window.addEventListener('hashchange', render);
 function updateClock(){ const c=document.getElementById('clock'); if(c) c.textContent = new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
