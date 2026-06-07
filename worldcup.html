@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Cup 2026</title>
+<style>
+  :root{
+    --bg:#fafafa; --card:#ffffff; --line:#e5e7eb; --ink:#111111;
+    --muted:#6b7280; --accent:#16a34a; --accent-soft:#dcfce7; --warn:#f59e0b;
+    --radius:8px; --maxw:760px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45}
+  header{background:var(--card);border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:10}
+  .bar{max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;
+    justify-content:space-between;padding:12px 16px}
+  .brand{font-weight:700}
+  nav.tabs{max-width:var(--maxw);margin:0 auto;display:flex;gap:4px;
+    padding:0 8px;overflow-x:auto}
+  nav.tabs a{padding:10px 12px;color:var(--muted);text-decoration:none;
+    border-bottom:2px solid transparent;white-space:nowrap;font-size:14px}
+  nav.tabs a.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  main{max-width:var(--maxw);margin:0 auto;padding:16px}
+  .panel{display:none}
+  .panel.active{display:block}
+  .label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+    color:var(--muted);font-weight:700;margin:18px 0 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px;margin-bottom:8px}
+  .empty{color:var(--muted);padding:24px 0;text-align:center}
+  /* Mobile: tabs become a fixed bottom bar */
+  @media (max-width:640px){
+    header{position:static}
+    nav.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--card);
+      border-top:1px solid var(--line);justify-content:space-around;padding:0;max-width:none}
+    nav.tabs a{flex:1;text-align:center;border-bottom:none;border-top:2px solid transparent;font-size:12px}
+    nav.tabs a.active{border-top-color:var(--accent);border-bottom:none}
+    main{padding-bottom:72px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar"><span class="brand">World Cup 2026</span><span id="clock" class="label" style="margin:0"></span></div>
+  <nav class="tabs">
+    <a href="#today" data-tab="today">Today</a>
+    <a href="#upcoming" data-tab="upcoming">Upcoming</a>
+    <a href="#myteams" data-tab="myteams">My Teams</a>
+    <a href="#standings" data-tab="standings">Standings</a>
+    <a href="#bracket" data-tab="bracket">Bracket</a>
+  </nav>
+</header>
+<main>
+  <section id="today" class="panel"></section>
+  <section id="upcoming" class="panel"></section>
+  <section id="myteams" class="panel"></section>
+  <section id="standings" class="panel"></section>
+  <section id="bracket" class="panel"></section>
+</main>
+
+<script type="application/json" id="wc-data">{"meta":{},"teams":[],"matches":[]}</script>
+
+<script>
+"use strict";
+const WC = JSON.parse(document.getElementById('wc-data').textContent);
+
+// ---- tab routing (hash-based; works on file:// and Pages) ----
+const TABS = ['today','upcoming','myteams','standings','bracket'];
+function currentTab(){
+  const h = location.hash.replace('#','');
+  return TABS.includes(h) ? h : 'today';
+}
+function render(){
+  const tab = currentTab();
+  document.querySelectorAll('nav.tabs a').forEach(a=>{
+    a.classList.toggle('active', a.dataset.tab===tab);
+  });
+  document.querySelectorAll('.panel').forEach(p=>{
+    p.classList.toggle('active', p.id===tab);
+  });
+  RENDERERS[tab] && RENDERERS[tab](document.getElementById(tab));
+}
+// Renderers are filled in by later tasks; default placeholder for now.
+const RENDERERS = {
+  today: el => el.innerHTML = '<div class="empty">Today — coming soon</div>',
+  upcoming: el => el.innerHTML = '<div class="empty">Upcoming — coming soon</div>',
+  myteams: el => el.innerHTML = '<div class="empty">My Teams — coming soon</div>',
+  standings: el => el.innerHTML = '<div class="empty">Standings — coming soon</div>',
+  bracket: el => el.innerHTML = '<div class="empty">Bracket — coming soon</div>',
+};
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
