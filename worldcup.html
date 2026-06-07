@@ -67,6 +67,35 @@
 "use strict";
 const WC = JSON.parse(document.getElementById('wc-data').textContent);
 
+// ---- formatting helpers (local timezone) ----
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+function kickoff(m){ return new Date(m.kickoffUtc); }
+function fmtTime(m){ return kickoff(m).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+function fmtDay(m){ return kickoff(m).toLocaleDateString([], {weekday:'short', month:'short', day:'numeric'}); }
+function isSameLocalDay(d, ref){
+  return d.getFullYear()===ref.getFullYear() && d.getMonth()===ref.getMonth() && d.getDate()===ref.getDate();
+}
+function teamLabel(m, side){ // side: 'home'|'away'
+  const name = side==='home'? m.homeName : m.awayName;
+  const code = side==='home'? m.home : m.away;
+  const t = WC.teams.find(t=>t.code===code);
+  const flag = t && t.flag ? t.flag+' ' : '';
+  return flag + name;
+}
+function scoreOrTime(m){
+  if (m.status==='finished' || m.status==='live'){
+    const live = m.status==='live' ? ' <span style="color:var(--accent)">●</span>' : '';
+    return `<strong>${m.homeScore ?? 0}–${m.awayScore ?? 0}</strong>${live}`;
+  }
+  return `<span style="color:var(--muted)">${fmtTime(m)}</span>`;
+}
+function matchRow(m){
+  return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <span>${teamLabel(m,'home')} <span style="color:var(--muted)">v</span> ${teamLabel(m,'away')}</span>
+    <span>${scoreOrTime(m)}</span></div>`;
+}
+function sortedMatches(){ return [...WC.matches].sort((a,b)=>a.kickoffUtc.localeCompare(b.kickoffUtc)); }
+
 // ---- tab routing (hash-based; works on file:// and Pages) ----
 const TABS = ['today','upcoming','myteams','standings','bracket'];
 function currentTab(){
@@ -83,15 +112,51 @@ function render(){
   });
   RENDERERS[tab] && RENDERERS[tab](document.getElementById(tab));
 }
+let _countdownTimer = null;
+function startCountdown(next){
+  if (_countdownTimer){ clearInterval(_countdownTimer); _countdownTimer=null; }
+  if (!next) return;
+  const tick = () => {
+    const el = document.getElementById('countdown');
+    if (!el){ clearInterval(_countdownTimer); return; }
+    const ms = kickoff(next) - new Date();
+    if (ms <= 0){ el.textContent = 'kicking off'; clearInterval(_countdownTimer); return; }
+    const h = Math.floor(ms/3.6e6), mn = Math.floor((ms%3.6e6)/6e4);
+    const d = Math.floor(h/24);
+    el.textContent = d>0 ? `in ${d}d ${h%24}h` : `in ${h}h ${mn}m`;
+  };
+  tick();
+  _countdownTimer = setInterval(tick, 1000);
+}
+
 // Renderers are filled in by later tasks; default placeholder for now.
 const RENDERERS = {
-  today: el => el.innerHTML = '<div class="empty">Today — coming soon</div>',
+  today: el => {
+    const now = new Date();
+    const all = sortedMatches();
+    const next = all.find(m => kickoff(m) > now && m.status!=='finished');
+    const todays = all.filter(m => isSameLocalDay(kickoff(m), now));
+    let html = '';
+    if (next){
+      html += `<div class="label">Up Next</div>
+        <div class="card" style="border-left:3px solid var(--accent)">
+          <div style="font-weight:700;font-size:18px">${teamLabel(next,'home')} <span style="color:var(--muted);font-weight:400">v</span> ${teamLabel(next,'away')}</div>
+          <div style="color:var(--muted);margin-top:4px">${fmtDay(next)} · ${fmtTime(next)} · <span id="countdown"></span></div>
+        </div>`;
+    }
+    html += `<div class="label">Today (${TZ})</div>`;
+    html += todays.length ? todays.map(matchRow).join('') : '<div class="empty">No matches today</div>';
+    el.innerHTML = html;
+    startCountdown(next);
+  },
   upcoming: el => el.innerHTML = '<div class="empty">Upcoming — coming soon</div>',
   myteams: el => el.innerHTML = '<div class="empty">My Teams — coming soon</div>',
   standings: el => el.innerHTML = '<div class="empty">Standings — coming soon</div>',
   bracket: el => el.innerHTML = '<div class="empty">Bracket — coming soon</div>',
 };
 window.addEventListener('hashchange', render);
+function updateClock(){ const c=document.getElementById('clock'); if(c) c.textContent = new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
+setInterval(updateClock, 1000); updateClock();
 render();
 </script>
 </body>
