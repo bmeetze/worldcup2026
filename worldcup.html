@@ -104,6 +104,29 @@ function matchRowWithCal(m){
 }
 function sortedMatches(){ return [...WC.matches].sort((a,b)=>a.kickoffUtc.localeCompare(b.kickoffUtc)); }
 
+// ---- standings (computed from finished group matches) ----
+// Tiebreak: points, then goal difference, then goals for, then team name.
+// Note: head-to-head and fair-play tiebreaks are intentionally not implemented (personal v1).
+function computeGroup(groupLetter){
+  const teams = WC.teams.filter(t=>t.group===groupLetter);
+  const table = new Map(teams.map(t=>[t.code,
+    {code:t.code, name:t.name, flag:t.flag, P:0,W:0,D:0,L:0,GF:0,GA:0,GD:0,Pts:0}]));
+  const games = WC.matches.filter(m=>m.stage==='group' && m.group===groupLetter && m.status==='finished'
+    && table.has(m.home) && table.has(m.away) && m.homeScore!=null && m.awayScore!=null);
+  for (const m of games){
+    const h = table.get(m.home), a = table.get(m.away);
+    h.P++; a.P++; h.GF+=m.homeScore; h.GA+=m.awayScore; a.GF+=m.awayScore; a.GA+=m.homeScore;
+    if (m.homeScore>m.awayScore){ h.W++; h.Pts+=3; a.L++; }
+    else if (m.homeScore<m.awayScore){ a.W++; a.Pts+=3; h.L++; }
+    else { h.D++; a.D++; h.Pts++; a.Pts++; }
+  }
+  const rows = [...table.values()];
+  for (const r of rows) r.GD = r.GF - r.GA;
+  rows.sort((x,y)=> y.Pts-x.Pts || y.GD-x.GD || y.GF-x.GF || x.name.localeCompare(y.name));
+  return rows;
+}
+function allGroupLetters(){ return [...new Set(WC.teams.map(t=>t.group))].filter(Boolean).sort(); }
+
 // ---- .ics calendar export ----
 function icsStamp(d){ // UTC -> YYYYMMDDTHHMMSSZ
   return d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
@@ -206,13 +229,66 @@ const RENDERERS = {
     el.innerHTML = html;
   },
   myteams: el => el.innerHTML = '<div class="empty">My Teams — coming soon</div>',
-  standings: el => el.innerHTML = '<div class="empty">Standings — coming soon</div>',
+  standings: el => {
+    const groups = allGroupLetters();
+    if (!groups.length){ el.innerHTML = '<div class="empty">No groups</div>'; return; }
+    let html = '';
+    for (const g of groups){
+      const rows = computeGroup(g);
+      html += `<div class="label">Group ${g}</div><div class="card" style="padding:0">
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr style="color:var(--muted);font-size:12px">
+          <th style="text-align:left;padding:8px">Team</th><th>P</th><th>GD</th><th>Pts</th></tr></thead><tbody>`;
+      rows.forEach((r,i)=>{
+        const qual = i<2 ? 'background:var(--accent-soft)' : (i===2 ? 'background:#fef3c7' : '');
+        html += `<tr style="border-top:1px solid var(--line);${qual}">
+          <td style="text-align:left;padding:8px">${r.flag?r.flag+' ':''}${r.name}</td>
+          <td style="text-align:center">${r.P}</td>
+          <td style="text-align:center">${r.GD>0?'+':''}${r.GD}</td>
+          <td style="text-align:center;font-weight:700">${r.Pts}</td></tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+    html += `<p style="color:var(--muted);font-size:12px;margin-top:12px">Green = top 2 (qualify). Amber = 3rd (best-third watch). Ties broken by GD, then GF, then name.</p>`;
+    el.innerHTML = html;
+  },
   bracket: el => el.innerHTML = '<div class="empty">Bracket — coming soon</div>',
 };
 window.addEventListener('hashchange', render);
 function updateClock(){ const c=document.getElementById('clock'); if(c) c.textContent = new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
 setInterval(updateClock, 1000); updateClock();
 render();
+// ---- self tests: open worldcup.html?selftest=1 to run ----
+function runSelfTests(){
+  const results = [];
+  const assert = (name, cond) => results.push({name, pass: !!cond});
+  const saveTeams = WC.teams, saveMatches = WC.matches;
+  WC.teams = [
+    {code:'AA',name:'Alpha',flag:'',group:'Z'},
+    {code:'BB',name:'Bravo',flag:'',group:'Z'},
+    {code:'CC',name:'Cesar',flag:'',group:'Z'},
+  ];
+  WC.matches = [
+    {stage:'group',group:'Z',home:'AA',away:'BB',status:'finished',homeScore:2,awayScore:0},
+    {stage:'group',group:'Z',home:'BB',away:'CC',status:'finished',homeScore:1,awayScore:1},
+    {stage:'group',group:'Z',home:'AA',away:'CC',status:'finished',homeScore:0,awayScore:0},
+  ];
+  const t = computeGroup('Z');
+  assert('Alpha tops group (4 pts)', t[0].code==='AA' && t[0].Pts===4);
+  assert('GD computed for Alpha (+2)', t[0].GD===2);
+  assert('All three teams ranked', t.length===3);
+  assert('Bravo above Cesar on GD/name fallback', t.findIndex(r=>r.code==='BB') < t.findIndex(r=>r.code==='CC') || t[1].Pts===t[2].Pts);
+  const ics = buildIcs([{id:'x',homeName:'A',awayName:'B',kickoffUtc:'2026-06-11T20:00:00Z',venue:'V'}]);
+  assert('ICS has VEVENT', /BEGIN:VEVENT[\s\S]*END:VEVENT/.test(ics));
+  assert('ICS has 30-min alarm', /TRIGGER:-PT30M/.test(ics));
+  WC.teams = saveTeams; WC.matches = saveMatches;
+  const pass = results.filter(r=>r.pass).length;
+  document.body.innerHTML = `<main style="padding:24px">
+    <h2>Self tests: ${pass}/${results.length} passed</h2>
+    <ul>${results.map(r=>`<li>${r.pass?'✅':'❌'} ${r.name}</li>`).join('')}</ul></main>`;
+  console.log('Self tests:', results);
+}
+if (new URLSearchParams(location.search).get('selftest')==='1') runSelfTests();
 </script>
 </body>
 </html>
