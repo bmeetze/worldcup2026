@@ -159,7 +159,7 @@ function vevent(m){
 }
 function buildIcs(matches){
   return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//worldcup2026//EN',
-    ...matches.map(vevent),'END:VCALENDAR'].join('\r\n');
+    ...matches.map(vevent),'END:VCALENDAR'].join('\r\n') + '\r\n';
 }
 function downloadIcs(filename, matches){
   const blob = new Blob([buildIcs(matches)], {type:'text/calendar'});
@@ -305,7 +305,7 @@ const RENDERERS = {
         const hi = matchInvolvesFav(m) ? 'border-left:3px solid var(--accent);' : '';
         return `<div class="card" style="${hi}display:flex;justify-content:space-between;align-items:center;gap:8px">
           <span>${teamLabel(m,'home')} <span style="color:var(--muted)">v</span> ${teamLabel(m,'away')}</span>
-          <span>${decided ? `<strong>${m.homeScore}–${m.awayScore}</strong>` : `<span style="color:var(--muted)">${fmtDay(m)} ${fmtTime(m)}</span>`}</span>
+          <span>${decided ? `<strong>${m.homeScore ?? 0}–${m.awayScore ?? 0}</strong>` : `<span style="color:var(--muted)">${fmtDay(m)} ${fmtTime(m)}</span>`}</span>
         </div>`;
       }).join('');
     }
