@@ -21,3 +21,59 @@ test('writeDataBlock replaces only the JSON, preserving surrounding HTML', () =>
 test('writeDataBlock throws if the block is missing', () => {
   assert.throws(() => writeDataBlock('<html></html>', {}), /wc-data block not found/);
 });
+
+import { mapStatus, mapStage, normalizeMatch } from '../wc-lib.mjs';
+
+test('mapStatus maps football-data statuses', () => {
+  assert.equal(mapStatus('TIMED'), 'scheduled');
+  assert.equal(mapStatus('SCHEDULED'), 'scheduled');
+  assert.equal(mapStatus('IN_PLAY'), 'live');
+  assert.equal(mapStatus('PAUSED'), 'live');
+  assert.equal(mapStatus('FINISHED'), 'finished');
+  assert.equal(mapStatus('SUSPENDED'), 'scheduled');
+});
+
+test('mapStage maps football-data stages', () => {
+  assert.equal(mapStage('GROUP_STAGE'), 'group');
+  assert.equal(mapStage('LAST_32'), 'r32');
+  assert.equal(mapStage('LAST_16'), 'r16');
+  assert.equal(mapStage('QUARTER_FINALS'), 'qf');
+  assert.equal(mapStage('SEMI_FINALS'), 'sf');
+  assert.equal(mapStage('THIRD_PLACE'), 'third');
+  assert.equal(mapStage('FINAL'), 'final');
+});
+
+test('normalizeMatch builds a schema match from an API match', () => {
+  const api = {
+    id: 12345, utcDate: '2026-06-11T20:00:00Z', status: 'TIMED',
+    stage: 'GROUP_STAGE', group: 'GROUP_A',
+    homeTeam: { tla: 'MEX', name: 'Mexico' },
+    awayTeam: { tla: 'CAN', name: 'Canada' },
+    score: { fullTime: { home: null, away: null } },
+    venue: 'Estadio Azteca'
+  };
+  const m = normalizeMatch(api);
+  assert.equal(m.id, 'fd-12345');
+  assert.equal(m.stage, 'group');
+  assert.equal(m.group, 'A');
+  assert.equal(m.home, 'MEX');
+  assert.equal(m.awayName, 'Canada');
+  assert.equal(m.status, 'scheduled');
+  assert.equal(m.homeScore, null);
+  assert.equal(m.venue, 'Estadio Azteca');
+});
+
+test('normalizeMatch handles unresolved knockout teams as TBD', () => {
+  const api = {
+    id: 9, utcDate: '2026-07-04T20:00:00Z', status: 'SCHEDULED',
+    stage: 'LAST_16', group: null,
+    homeTeam: { tla: null, name: null },
+    awayTeam: { tla: null, name: null },
+    score: { fullTime: { home: null, away: null } }, venue: null
+  };
+  const m = normalizeMatch(api);
+  assert.equal(m.home, 'TBD');
+  assert.equal(m.group, null);
+  assert.equal(m.homeName, 'TBD');
+  assert.equal(m.venue, '');
+});
