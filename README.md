@@ -14,6 +14,8 @@ A personal dashboard for the 2026 FIFA World Cup. One self-contained `worldcup.h
 
 Keep your token out of git. Either prefix the command as above, or put it in a local `.env` you do not commit and `export FOOTBALL_DATA_TOKEN=$(grep TOKEN .env | cut -d= -f2)`.
 
+Venues: football-data.org does not return stadiums, so `build-seed.mjs` enriches each match with stadium/city/state from the public-domain openfootball dataset (joined on kickoff time), via a 16-venue lookup in `wc-lib.mjs`. No key needed for that.
+
 ## Add games to Google Calendar
 Click the calendar button on a match (or "Export all my teams' games") to download an `.ics`. In Google Calendar: Settings > Import & Export > Import, choose the file. (Tapping an `.ics` on a Mac/iPhone opens Apple Calendar by default; use the Import flow for Google.)
 

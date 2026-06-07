@@ -127,3 +127,44 @@ test('confederationFor maps known TLAs and unknowns to empty', () => {
   assert.equal(confederationFor('RSA'), 'CAF');
   assert.equal(confederationFor('ZZZ'), '');
 });
+
+import { ofInstant, normTeam, venueLabel, attachVenues } from '../wc-lib.mjs';
+
+test('ofInstant converts local UTC-offset time to epoch ms', () => {
+  assert.equal(ofInstant('2026-06-11','13:00 UTC-6'), Date.parse('2026-06-11T19:00:00Z'));
+  assert.equal(ofInstant('2026-06-11','20:00 UTC-4'), Date.parse('2026-06-12T00:00:00Z')); // rolls to next day
+  assert.equal(ofInstant('2026-06-11','bad'), null);
+});
+
+test('normTeam canonicalizes cross-source aliases', () => {
+  assert.equal(normTeam('Czechia'), normTeam('Czech Republic'));
+  assert.equal(normTeam('Cape Verde Islands'), normTeam('Cape Verde'));
+  assert.equal(normTeam('Congo DR'), normTeam('DR Congo'));
+  assert.equal(normTeam('United States'), normTeam('USA'));
+  assert.equal(normTeam('Bosnia-Herzegovina'), normTeam('Bosnia & Herzegovina'));
+});
+
+test('venueLabel maps known grounds, empty for unknown', () => {
+  assert.equal(venueLabel('Mexico City'), 'Estadio Azteca, Mexico City, Mexico');
+  assert.equal(venueLabel('New York/New Jersey (East Rutherford)'), 'MetLife Stadium, East Rutherford, NJ');
+  assert.equal(venueLabel('Nowhere'), '');
+});
+
+test('attachVenues joins by instant and disambiguates simultaneous by team', () => {
+  const matches = [
+    { id:'a', kickoffUtc:'2026-06-11T19:00:00Z', homeName:'Mexico', awayName:'South Africa', venue:'' },
+    // simultaneous pair (same instant), disambiguated by team:
+    { id:'b', kickoffUtc:'2026-06-27T19:00:00Z', homeName:'Czechia', awayName:'Haiti', venue:'' },
+    { id:'c', kickoffUtc:'2026-06-27T19:00:00Z', homeName:'Brazil', awayName:'Norway', venue:'' },
+  ];
+  const of = [
+    { date:'2026-06-11', time:'13:00 UTC-6', team1:'Mexico', team2:'South Africa', ground:'Mexico City' },
+    { date:'2026-06-27', time:'15:00 UTC-4', team1:'Czech Republic', team2:'Haiti', ground:'Toronto' },
+    { date:'2026-06-27', time:'15:00 UTC-4', team1:'Brazil', team2:'Norway', ground:'Seattle' },
+  ];
+  const r = attachVenues(matches, of);
+  assert.equal(r.matched, 3);
+  assert.equal(matches[0].venue, 'Estadio Azteca, Mexico City, Mexico');
+  assert.equal(matches[1].venue, 'BMO Field, Toronto, ON');
+  assert.equal(matches[2].venue, 'Lumen Field, Seattle, WA');
+});
