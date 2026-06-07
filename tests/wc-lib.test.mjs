@@ -106,3 +106,12 @@ test('applyScores ignores api matches with no local id match', () => {
   const { changed } = applyScores(data, [{ id: 999, status: 'FINISHED', score: { fullTime: { home: 1, away: 1 } }, homeTeam:{tla:'A',name:'A'}, awayTeam:{tla:'B',name:'B'}, utcDate:'', stage:'GROUP_STAGE', group:'GROUP_A', venue:'' }]);
   assert.equal(changed, 0);
 });
+
+import { flagFor } from '../wc-lib.mjs';
+
+test('flagFor maps known TLAs to flag emoji and unknowns to empty', () => {
+  assert.equal(flagFor('USA'), '🇺🇸');
+  assert.equal(flagFor('BRA'), '🇧🇷');
+  assert.equal(flagFor('ENG'), '🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}');
+  assert.equal(flagFor('ZZZ'), '');
+});

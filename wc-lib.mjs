@@ -84,6 +84,21 @@ export async function fetchMatches(token, fetchImpl = fetch) {
   return body.matches || [];
 }
 
+// FIFA 3-letter (TLA) -> flag emoji. football-data.org does not return flags,
+// so we map them here. England/Scotland use subdivision flag emojis.
+const FLAG_BY_TLA = {
+  ALG:'🇩🇿', ARG:'🇦🇷', AUS:'🇦🇺', AUT:'🇦🇹', BEL:'🇧🇪', BIH:'🇧🇦', BRA:'🇧🇷',
+  CAN:'🇨🇦', CIV:'🇨🇮', COD:'🇨🇩', COL:'🇨🇴', CPV:'🇨🇻', CRO:'🇭🇷', CUW:'🇨🇼',
+  CZE:'🇨🇿', ECU:'🇪🇨', EGY:'🇪🇬', ENG:'🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',
+  ESP:'🇪🇸', FRA:'🇫🇷', GER:'🇩🇪', GHA:'🇬🇭', HAI:'🇭🇹', IRN:'🇮🇷', IRQ:'🇮🇶',
+  JOR:'🇯🇴', JPN:'🇯🇵', KOR:'🇰🇷', KSA:'🇸🇦', MAR:'🇲🇦', MEX:'🇲🇽', NED:'🇳🇱',
+  NOR:'🇳🇴', NZL:'🇳🇿', PAN:'🇵🇦', PAR:'🇵🇾', POR:'🇵🇹', QAT:'🇶🇦', RSA:'🇿🇦',
+  SCO:'🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}',
+  SEN:'🇸🇳', SUI:'🇨🇭', SWE:'🇸🇪', TUN:'🇹🇳', TUR:'🇹🇷', URY:'🇺🇾', USA:'🇺🇸',
+  UZB:'🇺🇿',
+};
+export function flagFor(tla){ return FLAG_BY_TLA[tla] || ''; }
+
 // Build the teams[] array from the API match list (deduped by tla).
 export function teamsFromMatches(apiMatches) {
   const map = new Map();
@@ -92,7 +107,7 @@ export function teamsFromMatches(apiMatches) {
     const group = api.group.replace('GROUP_', '');
     for (const side of [api.homeTeam, api.awayTeam]) {
       if (side?.tla && !map.has(side.tla)) {
-        map.set(side.tla, { code: side.tla, name: side.name, flag: '', group });
+        map.set(side.tla, { code: side.tla, name: side.name, flag: flagFor(side.tla), group });
       }
     }
   }
