@@ -77,3 +77,32 @@ test('normalizeMatch handles unresolved knockout teams as TBD', () => {
   assert.equal(m.homeName, 'TBD');
   assert.equal(m.venue, '');
 });
+
+import { applyScores } from '../wc-lib.mjs';
+
+test('applyScores updates score/status by id and counts changes', () => {
+  const data = { teams: [], matches: [
+    { id: 'fd-1', status: 'scheduled', homeScore: null, awayScore: null, home: 'A', away: 'B', homeName: 'A', awayName: 'B' },
+    { id: 'fd-2', status: 'scheduled', homeScore: null, awayScore: null, home: 'TBD', away: 'TBD', homeName: 'TBD', awayName: 'TBD' },
+  ]};
+  const apiMatches = [
+    { id: 1, status: 'FINISHED', score: { fullTime: { home: 2, away: 0 } },
+      homeTeam: { tla: 'A', name: 'A' }, awayTeam: { tla: 'B', name: 'B' },
+      utcDate: '2026-06-11T20:00:00Z', stage: 'GROUP_STAGE', group: 'GROUP_A', venue: '' },
+    { id: 2, status: 'SCHEDULED', score: { fullTime: { home: null, away: null } },
+      homeTeam: { tla: 'C', name: 'Chile' }, awayTeam: { tla: 'D', name: 'Denmark' },
+      utcDate: '2026-07-04T20:00:00Z', stage: 'LAST_16', group: null, venue: 'X' },
+  ];
+  const { data: out, changed } = applyScores(data, apiMatches);
+  assert.equal(changed, 2);
+  assert.equal(out.matches[0].homeScore, 2);
+  assert.equal(out.matches[0].status, 'finished');
+  assert.equal(out.matches[1].home, 'C');
+  assert.equal(out.matches[1].awayName, 'Denmark');
+});
+
+test('applyScores ignores api matches with no local id match', () => {
+  const data = { teams: [], matches: [{ id: 'fd-1', status: 'scheduled', homeScore: null, awayScore: null, home:'A', away:'B', homeName:'A', awayName:'B' }] };
+  const { changed } = applyScores(data, [{ id: 999, status: 'FINISHED', score: { fullTime: { home: 1, away: 1 } }, homeTeam:{tla:'A',name:'A'}, awayTeam:{tla:'B',name:'B'}, utcDate:'', stage:'GROUP_STAGE', group:'GROUP_A', venue:'' }]);
+  assert.equal(changed, 0);
+});

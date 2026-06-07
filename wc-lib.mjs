@@ -48,3 +48,53 @@ export function normalizeMatch(api) {
     awayScore: api.score?.fullTime?.away ?? null,
   };
 }
+
+// Merge API match data into existing data, keyed by id. Resolves knockout
+// teams when the API now knows them. Returns { data, changed }.
+export function applyScores(data, apiMatches) {
+  const byId = new Map(data.matches.map((m) => [m.id, m]));
+  let changed = 0;
+  for (const api of apiMatches) {
+    const local = byId.get('fd-' + api.id);
+    if (!local) continue;
+    const next = normalizeMatch(api);
+    const before = JSON.stringify(local);
+    local.status = next.status;
+    local.homeScore = next.homeScore;
+    local.awayScore = next.awayScore;
+    local.home = next.home;
+    local.away = next.away;
+    local.homeName = next.homeName;
+    local.awayName = next.awayName;
+    if (next.venue) local.venue = next.venue;
+    if (JSON.stringify(local) !== before) changed++;
+  }
+  return { data, changed };
+}
+
+const API_BASE = 'https://api.football-data.org/v4';
+
+// Fetch all WC matches. Requires an API token. Returns the raw API match array.
+export async function fetchMatches(token, fetchImpl = fetch) {
+  const res = await fetchImpl(`${API_BASE}/competitions/WC/matches`, {
+    headers: { 'X-Auth-Token': token },
+  });
+  if (!res.ok) throw new Error(`football-data.org returned ${res.status}`);
+  const body = await res.json();
+  return body.matches || [];
+}
+
+// Build the teams[] array from the API match list (deduped by tla).
+export function teamsFromMatches(apiMatches) {
+  const map = new Map();
+  for (const api of apiMatches) {
+    if (api.stage !== 'GROUP_STAGE' || !api.group) continue;
+    const group = api.group.replace('GROUP_', '');
+    for (const side of [api.homeTeam, api.awayTeam]) {
+      if (side?.tla && !map.has(side.tla)) {
+        map.set(side.tla, { code: side.tla, name: side.name, flag: '', group });
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
+}
