@@ -18,6 +18,8 @@ To commit and push the refreshed `worldcup.html` in the same run:
 
 The refresh uses ESPN's public scoreboard feed and does not require a token. `build-seed.mjs` is kept as a football-data.org fallback for rebuilding the original fixture seed, but normal score updates should use `refresh-scores.mjs`.
 
+The hosted app is also refreshed automatically by GitHub Actions every 30 minutes during the tournament. You can run that workflow manually from the repository's Actions tab when you want an immediate refresh.
+
 ## Add games to Google Calendar
 Click the calendar button on a match (or "Export all my teams' games") to download an `.ics`. In Google Calendar: Settings > Import & Export > Import, choose the file. (Tapping an `.ics` on a Mac/iPhone opens Apple Calendar by default; use the Import flow for Google.)
 
