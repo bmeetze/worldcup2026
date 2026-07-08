@@ -72,6 +72,120 @@ export function applyScores(data, apiMatches) {
   return { data, changed };
 }
 
+const ESPN_SCOREBOARD_URL =
+  'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+const ESPN_DEFAULT_DATES = '20260611-20260719';
+
+const ESPN_STAGE_MAP = {
+  'group-stage': 'group',
+  'round-of-32': 'r32',
+  'round-of-16': 'r16',
+  quarterfinals: 'qf',
+  semifinals: 'sf',
+  '3rd-place-match': 'third',
+  final: 'final',
+};
+export function mapEspnStage(slug) {
+  return ESPN_STAGE_MAP[slug] || 'group';
+}
+
+export function mapEspnStatus(state) {
+  if (state === 'in') return 'live';
+  if (state === 'post') return 'finished';
+  return 'scheduled';
+}
+
+function parseScore(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function espnVenueLabel(venue) {
+  const name = venue?.fullName || venue?.displayName || '';
+  const city = venue?.address?.city || '';
+  return [name, city].filter(Boolean).join(', ');
+}
+
+function isPlaceholderTeam(code, knownTeams) {
+  return !code || /\s/.test(code) || !knownTeams.has(code);
+}
+
+function normalizeEspnTeam(competitor, knownTeams) {
+  const code = competitor?.team?.abbreviation || '';
+  const name = competitor?.team?.displayName || competitor?.team?.name || 'TBD';
+  return isPlaceholderTeam(code, knownTeams) ? { code: 'TBD', name } : { code, name };
+}
+
+export function normalizeEspnEvent(event, knownTeams = new Map()) {
+  const competition = event.competitions?.[0] || {};
+  const competitors = competition.competitors || [];
+  const homeCompetitor = competitors.find((c) => c.homeAway === 'home') || competitors[0];
+  const awayCompetitor = competitors.find((c) => c.homeAway === 'away') || competitors[1];
+  const homeTeam = normalizeEspnTeam(homeCompetitor, knownTeams);
+  const awayTeam = normalizeEspnTeam(awayCompetitor, knownTeams);
+  const stage = mapEspnStage(event.season?.slug);
+  const state = competition.status?.type?.state || event.status?.type?.state;
+  const status = mapEspnStatus(state);
+  const showScores = status === 'finished' || status === 'live';
+  const match = {
+    id: 'espn-' + event.id,
+    kickoffUtc: event.date,
+    stage,
+    group: stage === 'group' ? (knownTeams.get(homeTeam.code)?.group || knownTeams.get(awayTeam.code)?.group || null) : null,
+    home: homeTeam.code,
+    away: awayTeam.code,
+    homeName: homeTeam.name,
+    awayName: awayTeam.name,
+    venue: espnVenueLabel(competition.venue || event.venue),
+    status,
+    homeScore: showScores ? parseScore(homeCompetitor?.score) : null,
+    awayScore: showScores ? parseScore(awayCompetitor?.score) : null,
+  };
+  if (status === 'finished') {
+    if (homeCompetitor?.winner || homeCompetitor?.advance) match.winner = 'home';
+    else if (awayCompetitor?.winner || awayCompetitor?.advance) match.winner = 'away';
+  }
+  return match;
+}
+
+export async function fetchEspnEvents(fetchImpl = fetch, dates = ESPN_DEFAULT_DATES) {
+  const url = new URL(ESPN_SCOREBOARD_URL);
+  url.searchParams.set('dates', dates);
+  url.searchParams.set('limit', '200');
+  const res = await fetchImpl(url);
+  if (!res.ok) throw new Error(`ESPN scoreboard returned ${res.status}`);
+  const body = await res.json();
+  return body.events || [];
+}
+
+export function syncEspnData(data, events, generatedAt = new Date().toISOString()) {
+  const knownTeams = new Map(data.teams.map((t) => [t.code, t]));
+  const matches = events
+    .map((event) => normalizeEspnEvent(event, knownTeams))
+    .sort((a, b) => a.kickoffUtc.localeCompare(b.kickoffUtc));
+  const previousById = new Map(data.matches.map((m) => [m.id, m]));
+  let changed = 0;
+  for (const match of matches) {
+    const previous = previousById.get(match.id);
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(match)) changed++;
+  }
+  for (const previous of data.matches) {
+    if (!matches.some((match) => match.id === previous.id)) changed++;
+  }
+  if (changed === 0) return { data, changed };
+  const next = {
+    ...data,
+    meta: {
+      ...data.meta,
+      generatedAt,
+      source: 'ESPN public scoreboard',
+    },
+    matches,
+  };
+  return { data: next, changed };
+}
+
 const API_BASE = 'https://api.football-data.org/v4';
 
 // Fetch all WC matches. Requires an API token. Returns the raw API match array.

@@ -107,6 +107,144 @@ test('applyScores ignores api matches with no local id match', () => {
   assert.equal(changed, 0);
 });
 
+import { fetchEspnEvents, mapEspnStage, mapEspnStatus, normalizeEspnEvent, syncEspnData } from '../wc-lib.mjs';
+
+test('mapEspnStage maps ESPN season slugs', () => {
+  assert.equal(mapEspnStage('group-stage'), 'group');
+  assert.equal(mapEspnStage('round-of-32'), 'r32');
+  assert.equal(mapEspnStage('round-of-16'), 'r16');
+  assert.equal(mapEspnStage('quarterfinals'), 'qf');
+  assert.equal(mapEspnStage('semifinals'), 'sf');
+  assert.equal(mapEspnStage('3rd-place-match'), 'third');
+  assert.equal(mapEspnStage('final'), 'final');
+});
+
+test('mapEspnStatus maps ESPN status states', () => {
+  assert.equal(mapEspnStatus('pre'), 'scheduled');
+  assert.equal(mapEspnStatus('in'), 'live');
+  assert.equal(mapEspnStatus('post'), 'finished');
+});
+
+test('normalizeEspnEvent builds an app match and preserves knockout winner', () => {
+  const knownTeams = new Map([
+    ['GER', { code: 'GER', group: 'E' }],
+    ['PAR', { code: 'PAR', group: 'D' }],
+  ]);
+  const event = {
+    id: '760488',
+    date: '2026-06-29T20:30Z',
+    season: { slug: 'round-of-32' },
+    status: { type: { state: 'post' } },
+    competitions: [{
+      venue: { fullName: 'Gillette Stadium', address: { city: 'Foxborough, Massachusetts' } },
+      status: { type: { state: 'post' } },
+      competitors: [
+        { homeAway: 'home', winner: false, score: '1', team: { abbreviation: 'GER', displayName: 'Germany' } },
+        { homeAway: 'away', winner: true, score: '1', team: { abbreviation: 'PAR', displayName: 'Paraguay' } },
+      ],
+    }],
+  };
+  const match = normalizeEspnEvent(event, knownTeams);
+  assert.equal(match.id, 'espn-760488');
+  assert.equal(match.stage, 'r32');
+  assert.equal(match.homeScore, 1);
+  assert.equal(match.awayScore, 1);
+  assert.equal(match.winner, 'away');
+  assert.equal(match.venue, 'Gillette Stadium, Foxborough, Massachusetts');
+});
+
+test('normalizeEspnEvent converts future placeholder teams to TBD', () => {
+  const event = {
+    id: '760514',
+    date: '2026-07-14T19:00Z',
+    season: { slug: 'semifinals' },
+    competitions: [{
+      status: { type: { state: 'pre' } },
+      competitors: [
+        { homeAway: 'home', score: '0', team: { abbreviation: 'QFW1', displayName: 'Quarterfinal 1 Winner' } },
+        { homeAway: 'away', score: '0', team: { abbreviation: 'QFW2', displayName: 'Quarterfinal 2 Winner' } },
+      ],
+    }],
+  };
+  const match = normalizeEspnEvent(event, new Map());
+  assert.equal(match.home, 'TBD');
+  assert.equal(match.away, 'TBD');
+  assert.equal(match.homeName, 'Quarterfinal 1 Winner');
+  assert.equal(match.homeScore, null);
+});
+
+test('syncEspnData replaces matches and keeps existing teams', () => {
+  const data = {
+    meta: { competition: 'FIFA World Cup 2026', source: 'old' },
+    teams: [{ code: 'MEX', group: 'A' }, { code: 'RSA', group: 'A' }],
+    matches: [],
+  };
+  const events = [{
+    id: '760415',
+    date: '2026-06-11T19:00Z',
+    season: { slug: 'group-stage' },
+    competitions: [{
+      status: { type: { state: 'post' } },
+      competitors: [
+        { homeAway: 'home', winner: true, score: '2', team: { abbreviation: 'MEX', displayName: 'Mexico' } },
+        { homeAway: 'away', winner: false, score: '0', team: { abbreviation: 'RSA', displayName: 'South Africa' } },
+      ],
+    }],
+  }];
+  const { data: out, changed } = syncEspnData(data, events, '2026-07-07T00:00:00.000Z');
+  assert.equal(changed, 1);
+  assert.equal(out.teams, data.teams);
+  assert.equal(out.meta.source, 'ESPN public scoreboard');
+  assert.equal(out.matches[0].group, 'A');
+});
+
+test('syncEspnData returns unchanged data when matches are identical', () => {
+  const data = {
+    meta: { generatedAt: 'old', source: 'ESPN public scoreboard' },
+    teams: [{ code: 'MEX', group: 'A' }, { code: 'RSA', group: 'A' }],
+    matches: [{
+      id: 'espn-760415',
+      kickoffUtc: '2026-06-11T19:00Z',
+      stage: 'group',
+      group: 'A',
+      home: 'MEX',
+      away: 'RSA',
+      homeName: 'Mexico',
+      awayName: 'South Africa',
+      venue: '',
+      status: 'finished',
+      homeScore: 2,
+      awayScore: 0,
+      winner: 'home',
+    }],
+  };
+  const events = [{
+    id: '760415',
+    date: '2026-06-11T19:00Z',
+    season: { slug: 'group-stage' },
+    competitions: [{
+      status: { type: { state: 'post' } },
+      competitors: [
+        { homeAway: 'home', winner: true, score: '2', team: { abbreviation: 'MEX', displayName: 'Mexico' } },
+        { homeAway: 'away', winner: false, score: '0', team: { abbreviation: 'RSA', displayName: 'South Africa' } },
+      ],
+    }],
+  }];
+  const result = syncEspnData(data, events, 'new');
+  assert.equal(result.changed, 0);
+  assert.equal(result.data, data);
+});
+
+test('fetchEspnEvents reads events from the scoreboard response', async () => {
+  const events = [{ id: '1' }];
+  const fetchImpl = async (url) => {
+    assert.match(String(url), /dates=20260611-20260719/);
+    assert.match(String(url), /limit=200/);
+    return { ok: true, json: async () => ({ events }) };
+  };
+  assert.equal(await fetchEspnEvents(fetchImpl), events);
+});
+
 import { flagFor } from '../wc-lib.mjs';
 
 test('flagFor maps known TLAs to flag emoji and unknowns to empty', () => {

@@ -7,14 +7,16 @@ A personal dashboard for the 2026 FIFA World Cup. One self-contained `worldcup.h
 - Local: double-click `worldcup.html` (works offline; scores update only when you refresh)
 - On your phone: open the hosted URL, then Share > Add to Home Screen.
 
-## Set up the data API (football-data.org)
-1. Get a free token at https://www.football-data.org/client/register
-2. Seed fixtures once: `FOOTBALL_DATA_TOKEN=xxxx node build-seed.mjs`
-3. Refresh scores anytime: `FOOTBALL_DATA_TOKEN=xxxx node refresh-scores.mjs` (commits + pushes; Pages redeploys in ~1 min)
+## Refresh the data
+Refresh scores and resolved knockout teams anytime:
 
-Keep your token out of git. Either prefix the command as above, or put it in a local `.env` you do not commit and `export FOOTBALL_DATA_TOKEN=$(grep TOKEN .env | cut -d= -f2)`.
+`node refresh-scores.mjs`
 
-Venues: football-data.org does not return stadiums, so `build-seed.mjs` enriches each match with stadium/city/state from the public-domain openfootball dataset (joined on kickoff time), via a 16-venue lookup in `wc-lib.mjs`. No key needed for that.
+To commit and push the refreshed `worldcup.html` in the same run:
+
+`node refresh-scores.mjs --commit`
+
+The refresh uses ESPN's public scoreboard feed and does not require a token. `build-seed.mjs` is kept as a football-data.org fallback for rebuilding the original fixture seed, but normal score updates should use `refresh-scores.mjs`.
 
 ## Add games to Google Calendar
 Click the calendar button on a match (or "Export all my teams' games") to download an `.ics`. In Google Calendar: Settings > Import & Export > Import, choose the file. (Tapping an `.ics` on a Mac/iPhone opens Apple Calendar by default; use the Import flow for Google.)
